@@ -1,0 +1,81 @@
+cabal-version:  2.4
+name:           sample-laminterp
+version:        0.1.0.0
+author:         Mizunashi Mana
+license:        MPL-2.0 OR Apache-2.0
+license-file:   LICENSE
+build-type:     Custom
+
+common general
+  ghc-options:
+      -Wall
+      -Wcompat
+      -Wincomplete-uni-patterns
+      -Wincomplete-record-updates
+      -Wredundant-constraints
+
+      -fprint-explicit-foralls
+      -fprint-potential-instances
+
+      -dcore-lint
+  build-depends:
+      base
+    , extensible
+    , parsers
+    , prettyprinter
+    , trifecta
+  default-language: Haskell2010
+  autogen-modules:
+      Paths_sample_laminterp
+  other-modules:
+      Paths_sample_laminterp
+
+common exec
+  ghc-options:
+      -rtsopts
+  ghc-prof-options:
+      -rtsopts
+      "-with-rtsopts=-xc"
+  build-depends:
+      sample-laminterp
+
+custom-setup
+  setup-depends:
+      Cabal >=2.0
+    , base
+    , cabal-doctest
+
+library
+  import: general
+  hs-source-dirs: src
+  exposed-modules:
+      Data.HFunctor
+      Data.HFunctor.OpenUnion
+      Data.HFunctor.Cofree
+
+executable sample-laminterp-exe
+  import: general, exec
+  hs-source-dirs: app
+  main-is: Main.hs
+
+test-suite doctest
+  import: general, exec
+  type: exitcode-stdio-1.0
+  hs-source-dirs: test
+  main-is: Doctest.hs
+  autogen-modules:
+      Build_doctests
+  other-modules:
+      Build_doctests
+  build-depends:
+      doctest
+    , QuickCheck
+    , template-haskell
+
+test-suite lint
+  import: general, exec
+  type: exitcode-stdio-1.0
+  hs-source-dirs: test
+  main-is: Lint.hs
+  build-depends:
+      hlint

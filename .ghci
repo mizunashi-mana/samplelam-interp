@@ -1,0 +1,4 @@
+:set -Wno-type-defaults
+
+:set -XOverloadedStrings
+:set -XOverloadedLists
