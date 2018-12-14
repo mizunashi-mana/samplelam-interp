@@ -1,10 +1,12 @@
 module Data.Annotation where
 
+import           SampleLam.Prelude
+
 import           Control.Lens          (view)
 import           Data.Extensible       hiding (nil, (<:))
 import           Data.Extensible.HList
+import           Data.Nat
 import           Data.Profunctor       (dimap)
-import           GHC.OverloadedLabels
 
 
 newtype RevApply a f = RevApply

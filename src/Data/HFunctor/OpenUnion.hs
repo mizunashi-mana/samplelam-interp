@@ -1,6 +1,3 @@
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE UndecidableInstances #-}
-
 module Data.HFunctor.OpenUnion where
 
 import SampleLam.Prelude
@@ -53,7 +50,7 @@ instance MemberCtx Eq fs r i => Eq (HUnion fs r i) where
     Left  _    -> False
     Right Refl -> case toMemberCtx @Eq x1 n1 of Dict -> x1 == x2
 
-instance (Eq (HUnion fs r i), MemberCtx Ord fs r i) => Ord (HUnion fs r i) where
+instance (MemberCtx Eq fs r i, MemberCtx Ord fs r i) => Ord (HUnion fs r i) where
   HUnion n1 x1 `compare` HUnion n2 x2 = case compareMembership n1 n2 of
     Left  r    -> r
     Right Refl -> case toMemberCtx @Ord x1 n1 of Dict -> x1 `compare` x2

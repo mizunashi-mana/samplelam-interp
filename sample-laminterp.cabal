@@ -6,6 +6,10 @@ license:        MPL-2.0 OR Apache-2.0
 license-file:   LICENSE
 build-type:     Custom
 
+flag multithreaded
+  Default: False
+  Manual: False
+
 common general
   autogen-modules:
       Paths_sample_laminterp
@@ -34,24 +38,29 @@ common general
   default-language: Haskell2010
   default-extensions:
       NoImplicitPrelude
+
       BlockArguments
-      DataKinds
-      DeriveFunctor
+      ConstraintKinds
       FlexibleInstances
       FlexibleContexts
-      FunctionalDependencies
-      GADTs
       LambdaCase
       MultiParamTypeClasses
       OverloadedLabels
+      TypeOperators
+
+      DeriveFunctor
+      DeriveGeneric
+      StandaloneDeriving
+
+      DataKinds
+      FunctionalDependencies
+      GADTs
       PolyKinds
       QuantifiedConstraints
       RankNTypes
       ScopedTypeVariables
-      StandaloneDeriving
       TypeApplications
       TypeFamilies
-      TypeOperators
 
 common exec
   ghc-options:
@@ -72,12 +81,19 @@ library
   import: general
   hs-source-dirs: src
   exposed-modules:
+      SampleLam.Prelude
+      Data.Nat
       Data.HFunctor
       Data.HFunctor.Cofree
       Data.HFunctor.HFix
       Data.HFunctor.OpenUnion
-      Data.Nat
-      SampleLam.Prelude
+      Data.Annotation
+      Language.SampleLam.Syntax
+      Language.SampleLam.Core
+      Language.SampleLam.Printer
+      Language.SampleLam.Parser
+      Language.SampleLam.Normalizer
+      Language.SampleLam.Interpreter
 
 executable sample-laminterp-exe
   import: general, exec
