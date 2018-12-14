@@ -7,6 +7,19 @@ license-file:   LICENSE
 build-type:     Custom
 
 common general
+  autogen-modules:
+      Paths_sample_laminterp
+  other-modules:
+      Paths_sample_laminterp
+  build-depends:
+      base
+    , constraints
+    , extensible
+    , lens
+    , parsers
+    , prettyprinter
+    , profunctors
+    , trifecta
   ghc-options:
       -Wall
       -Wcompat
@@ -18,17 +31,27 @@ common general
       -fprint-potential-instances
 
       -dcore-lint
-  build-depends:
-      base
-    , extensible
-    , parsers
-    , prettyprinter
-    , trifecta
   default-language: Haskell2010
-  autogen-modules:
-      Paths_sample_laminterp
-  other-modules:
-      Paths_sample_laminterp
+  default-extensions:
+      NoImplicitPrelude
+      BlockArguments
+      DataKinds
+      DeriveFunctor
+      FlexibleInstances
+      FlexibleContexts
+      FunctionalDependencies
+      GADTs
+      LambdaCase
+      MultiParamTypeClasses
+      OverloadedLabels
+      PolyKinds
+      QuantifiedConstraints
+      RankNTypes
+      ScopedTypeVariables
+      StandaloneDeriving
+      TypeApplications
+      TypeFamilies
+      TypeOperators
 
 common exec
   ghc-options:
@@ -50,8 +73,11 @@ library
   hs-source-dirs: src
   exposed-modules:
       Data.HFunctor
-      Data.HFunctor.OpenUnion
       Data.HFunctor.Cofree
+      Data.HFunctor.HFix
+      Data.HFunctor.OpenUnion
+      Data.Nat
+      SampleLam.Prelude
 
 executable sample-laminterp-exe
   import: general, exec
