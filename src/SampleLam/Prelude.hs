@@ -8,6 +8,6 @@ module SampleLam.Prelude
 
 import           Control.Category
 import           Data.Kind
-import           Prelude          hiding (id, (.))
-import           GHC.Generics (Generic(..))
-import GHC.OverloadedLabels (IsLabel(..))
+import           GHC.Generics         (Generic (..))
+import           GHC.OverloadedLabels (IsLabel (..))
+import           Prelude              hiding (id, (.))
