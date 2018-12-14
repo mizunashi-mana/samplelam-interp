@@ -23,21 +23,26 @@ newline: lf
 
 language_extensions:
   - NoImplicitPrelude
+
   - BlockArguments
-  - DataKinds
-  - DeriveFunctor
+  - ConstraintKinds
   - FlexibleInstances
   - FlexibleContexts
-  - FunctionalDependencies
-  - GADTs
   - LambdaCase
   - MultiParamTypeClasses
   - OverloadedLabels
+  - TypeOperators
+
+  - DeriveFunctor
+  - DeriveGeneric
+  - StandaloneDeriving
+
+  - DataKinds
+  - FunctionalDependencies
+  - GADTs
   - PolyKinds
   - QuantifiedConstraints
   - RankNTypes
   - ScopedTypeVariables
-  - StandaloneDeriving
   - TypeApplications
   - TypeFamilies
-  - TypeOperators
