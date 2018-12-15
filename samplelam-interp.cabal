@@ -1,29 +1,38 @@
 cabal-version:  2.4
-name:           sample-laminterp
+name:           samplelam-interp
 version:        0.1.0.0
 author:         Mizunashi Mana
 license:        MPL-2.0 OR Apache-2.0
 license-file:   LICENSE
+homepage:       https://github.com/mizunashi-mana/samplelam-interp#readme
 build-type:     Custom
 
-flag multithreaded
-  Default: False
-  Manual: False
+source-repository head
+  type:     git
+  location: https://github.com/mizunashi-mana/samplelam-interp
+
+flag threaded
+  default: False
+  manual: False
+  description: Build with support for multithreaded execution
 
 common general
   autogen-modules:
-      Paths_sample_laminterp
+      Paths_samplelam_interp
   other-modules:
-      Paths_sample_laminterp
+      Paths_samplelam_interp
   build-depends:
       base
     , constraints
     , extensible
+    , unordered-containers
     , lens
     , parsers
+    , trifecta
+    , indentation-trifecta
+    , bound
     , prettyprinter
     , profunctors
-    , trifecta
   ghc-options:
       -Wall
       -Wcompat
@@ -68,8 +77,15 @@ common exec
   ghc-prof-options:
       -rtsopts
       "-with-rtsopts=-xc"
+  if flag(threaded)
+    ghc-options:
+      -threaded
+      "-with-rtsopts=-N"
+    ghc-prof-options:
+      -threaded
+      "-with-rtsopts=-N -xc"
   build-depends:
-      sample-laminterp
+      samplelam-interp
 
 custom-setup
   setup-depends:
@@ -95,7 +111,7 @@ library
       Language.SampleLam.Normalizer
       Language.SampleLam.Interpreter
 
-executable sample-laminterp-exe
+executable samplelam-interp-exe
   import: general, exec
   hs-source-dirs: app
   main-is: Main.hs
