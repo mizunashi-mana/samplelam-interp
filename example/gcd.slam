@@ -1,0 +1,11 @@
+let
+  main = gcd 24 56
+
+  gcd m n = let
+      gcd' m n = if m % n == 0
+        then m
+        else gcd' n (m / n)
+    in if m < n
+      then gcd' m n
+      else gcd' n m
+in main

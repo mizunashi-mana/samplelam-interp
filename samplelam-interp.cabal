@@ -55,6 +55,7 @@ common general
       LambdaCase
       MultiParamTypeClasses
       OverloadedLabels
+      RecordWildCards
       TypeOperators
 
       DeriveFunctor

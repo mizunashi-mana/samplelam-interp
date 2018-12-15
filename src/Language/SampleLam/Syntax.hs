@@ -18,6 +18,7 @@ data ExprF r i where
   LamAbsF :: r 'VarTag -> r 'ExprTag -> ExprF r 'ExprTag
   AppF :: r 'ExprTag -> r 'ExprTag -> ExprF r 'ExprTag
   LetF :: [r 'DeclTag] -> r 'ExprTag -> ExprF r 'ExprTag
+  IfF :: r 'ExprTag -> r 'ExprTag -> r 'ExprTag -> ExprF r 'ExprTag
   VarExprF :: r 'VarTag -> ExprF r 'ExprTag
   LitExprF :: r 'LitTag -> ExprF r 'ExprTag
 
@@ -30,6 +31,7 @@ instance HFunctor ExprF where
     LamAbsF v e -> LamAbsF (f v) (f e)
     AppF e1 e2  -> AppF (f e1) (f e2)
     LetF ds e   -> LetF (f <$> ds) (f e)
+    IfF c e1 e2 -> IfF (f c) (f e1) (f e2)
     VarExprF v  -> VarExprF (f v)
     LitExprF l  -> LitExprF (f l)
 
@@ -59,6 +61,7 @@ instance HFunctor VarF where
 
 
 data LitF r i where
+  BoolLitF :: Bool -> LitF r 'LitTag
   IntLitF :: Integer -> LitF r 'LitTag
 
 deriving instance Eq (LitF r j)
@@ -67,4 +70,5 @@ deriving instance Show (LitF r j)
 
 instance HFunctor LitF where
   hfmap _ = Nat \case
-    IntLitF i -> IntLitF i
+    BoolLitF b -> BoolLitF b
+    IntLitF  i -> IntLitF i
