@@ -58,6 +58,7 @@ common general
       RecordWildCards
       TypeOperators
 
+      GeneralizedNewtypeDeriving
       DeriveFunctor
       DeriveGeneric
       StandaloneDeriving

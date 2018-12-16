@@ -1,0 +1,10 @@
+let
+  main = foldnat (\x y -> x * y) 1 10
+
+  foldnat f e =
+    let
+      go n = if n <= 0
+        then e
+        else f n (go (n - 1))
+    in go
+in main

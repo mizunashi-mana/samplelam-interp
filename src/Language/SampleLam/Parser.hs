@@ -12,11 +12,14 @@ import           Language.SampleLam.Syntax
 import           Text.Parser.Char
 import           Text.Parser.Combinators
 import           Text.Parser.Token           (IdentifierStyle (..),
-                                              TokenParsing)
+                                              TokenParsing (..))
 import qualified Text.Parser.Token           as Tok
 import qualified Text.Parser.Token.Highlight as Highlight
+import           Text.Parser.Token.Style     (buildSomeSpaceParser,
+                                              haskellCommentStyle)
 import           Text.Trifecta.Combinators
 import           Text.Trifecta.Delta
+import           Text.Trifecta.Indentation
 
 
 type MonadicTokenParsing m =
@@ -29,6 +32,28 @@ type MonadicTokenParsing m =
 
 attachDelta :: MonadicTokenParsing m => m (Delta -> a) -> m a
 attachDelta p = p <*> position
+
+
+newtype SampleLamParser m a = SampleLamParser
+  { runSampleLamParser :: IndentationParserT Token m a
+  } deriving
+    ( Functor
+    , Applicative
+    , Monad
+    , Alternative
+    , MonadPlus
+    , Parsing
+    , CharParsing
+    , DeltaParsing
+    , IndentationParsing
+    )
+
+instance DeltaParsing m => TokenParsing (SampleLamParser m) where
+  someSpace = SampleLamParser $ buildSomeSpaceParser someSpace haskellCommentStyle
+  nesting = SampleLamParser . nesting . runSampleLamParser
+  semi = SampleLamParser semi
+  highlight h = SampleLamParser . highlight h . runSampleLamParser
+  token p = (SampleLamParser . token . runSampleLamParser) p <* Tok.whiteSpace
 
 
 {-

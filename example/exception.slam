@@ -1,0 +1,4 @@
+let
+  -- raise an exception by divided 0
+  main = 1 / 0
+in main
