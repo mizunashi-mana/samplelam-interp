@@ -2,8 +2,7 @@ module Language.SampleLam.Syntax where
 
 import SampleLam.Prelude
 
-import Data.Nat
-import Data.HFunctor
+import Data.HigherOrder
 
 
 data AstTag
@@ -12,6 +11,9 @@ data AstTag
   | VarTag
   | LitTag
   deriving (Eq, Ord, Show, Enum, Bounded, Generic)
+
+
+type AstF = '[ExprF, DeclF, VarF, LitF]
 
 
 data ExprF r i where

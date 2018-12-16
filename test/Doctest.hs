@@ -1,5 +1,6 @@
 module Main where
 
+import           Prelude
 import           Build_doctests (flags, module_sources, pkgs)
 import           Test.DocTest
 

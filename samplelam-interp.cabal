@@ -104,6 +104,7 @@ library
       Data.HFunctor.Cofree
       Data.HFunctor.HFix
       Data.HFunctor.OpenUnion
+      Data.HigherOrder
       Data.Annotation
       Language.SampleLam.Syntax
       Language.SampleLam.Core

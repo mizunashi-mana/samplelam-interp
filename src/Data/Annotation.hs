@@ -34,7 +34,7 @@ nil = HNil
 
 
 newtype AnnFieldGetter fs f = AnnFieldGetter
-  { getField :: Ann fs :~> f
+  { getAnnField :: Ann fs :~> f
   }
 instance Associate k f fs => IsLabel k (AnnFieldGetter fs f) where
   fromLabel = AnnFieldGetter

@@ -1,5 +1,6 @@
 module Main where
 
+import           Prelude
 import           Control.Monad
 import           Language.Haskell.HLint
 import qualified System.Environment     as Env

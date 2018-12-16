@@ -5,6 +5,9 @@ import           SampleLam.Prelude
 import           Control.Applicative
 import           Control.Monad
 import qualified Data.HashSet                as HashSet
+import           Data.HFunctor.OpenUnion
+import           Data.HigherOrder
+import qualified Data.List.NonEmpty          as NonEmpty
 import           Language.SampleLam.Syntax
 import           Text.Parser.Char
 import           Text.Parser.Combinators
@@ -43,25 +46,44 @@ Grammar:
 <program> ::= <expr>
 
 
-<expr> ::= <expr0>
+<expr> ::= <expr7>
 
-<expr0> ::= \ <var>_1 ... <var>_n -> <expr>
+<expr7> ::= \ <args> -> <expr>
           | let <decls> in <expr>
           | if <expr> then <expr> else <expr>
-          | <expr1>
+          | <expr6>
 
-<expr1> ::= <expr2> + <expr1>
-          | <expr2> - <expr1>
-          | <expr2>
+<args> ::= <var> <args1>
 
-<expr2> ::= <expr3> * <expr2>
-          | <expr3> / <expr2>
-          | <expr3>
+<args1> ::= <var> <args1>
+          |
 
-<expr3> ::= <expr4> % <expr3>
+<expr6> ::= <expr5> || <expr6>
+          | <expr5>
+
+<expr5> ::= <expr4> && <expr5>
           | <expr4>
 
-<expr4> ::= <factor>
+<expr4> ::= <expr3> == <expr4>
+          | <expr3> /= <expr4>
+          | <expr3>
+
+<expr3> ::= <expr2> <= <expr3>
+          | <expr2> <  <expr3>
+          | <expr2> >= <expr3>
+          | <expr2> >  <expr3>
+          | <expr2>
+
+<expr2> ::= <expr1> + <expr2>
+          | <expr1> - <expr2>
+          | <expr1>
+
+<expr1> ::= <expr0> * <expr1>
+          | <expr0> / <expr1>
+          | <expr0> % <expr1>
+          | <expr0>
+
+<expr0> ::= <factor>
 
 <factor> ::= <evar>
            | <lit>
@@ -73,6 +95,7 @@ Grammar:
 <decls> ::= { <semidecls> }
 
 <semidecls> ::= <decl> <semidecls1>
+              | ; <semidecls>
               |
 
 <semidecls1> ::= ; <semidecls>
@@ -94,13 +117,15 @@ Grammar:
 
 -}
 
-data AstParsingR m r = AstParsingR
+data GrammarUnitsF m r = GrammarUnitsF
   { identifier :: m String
   , reserved   :: String -> m ()
   , bool       :: m Bool
   , integer    :: m Integer
 
-  , program    :: m (ExprF r 'ExprTag)
+  , program    :: r 'ExprTag
+  , expr       :: r 'ExprTag
+  , exprs      :: NonEmpty.NonEmpty (r 'ExprTag)
   }
 
 
@@ -116,8 +141,10 @@ identStyle = IdentifierStyle
   , _styleReservedHighlight = Highlight.ReservedIdentifier
   }
 
-astParsingR :: MonadicTokenParsing m => AstParsingR m r
-astParsingR = AstParsingR {..}
+grammarUnitsF :: MonadicTokenParsing m
+  => (forall f. Member AstF f => Compose m (f r) :~> Compose m r)
+  -> GrammarUnitsF m r -> GrammarUnitsF m r
+grammarUnitsF _ us = GrammarUnitsF {..}
   where
     identifier = Tok.ident identStyle
 
@@ -129,13 +156,18 @@ astParsingR = AstParsingR {..}
 
     integer = Tok.integer
 
-    program = empty
+
+    program = getField @"expr" us
+
+    expr = NonEmpty.head $ getField @"exprs" us
+
+    exprs = undefined
 
 
-varF :: MonadicTokenParsing m => AstParsingR m r -> m (VarF r 'VarTag)
-varF AstParsingR{..} = VarF <$> identifier
+varF :: MonadicTokenParsing m => GrammarUnitsF m r -> m (VarF r 'VarTag)
+varF GrammarUnitsF{..} = VarF <$> identifier
 
-litF :: MonadicTokenParsing m => AstParsingR m r -> m (LitF r 'LitTag)
-litF AstParsingR{..}
+litF :: MonadicTokenParsing m => GrammarUnitsF m r -> m (LitF r 'LitTag)
+litF GrammarUnitsF{..}
   =   BoolLitF <$> bool
   <|> IntLitF <$> integer

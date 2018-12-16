@@ -1,4 +1,13 @@
-module Data.HFunctor.OpenUnion where
+module Data.HFunctor.OpenUnion
+  ( Member(..)
+
+  , HUnion(..)
+  , injectU
+  , injectHere
+  , decomp
+  , weaken
+  , absurdU
+  ) where
 
 import SampleLam.Prelude
 
