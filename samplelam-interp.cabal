@@ -13,8 +13,13 @@ source-repository head
 
 flag threaded
   default: False
-  manual: False
+  manual:  False
   description: Build with support for multithreaded execution
+
+flag optimized
+  default: False
+  manual:  False
+  description: Build with more optimization
 
 common general
   autogen-modules:
@@ -39,6 +44,7 @@ common general
       -Wincomplete-uni-patterns
       -Wincomplete-record-updates
       -Wredundant-constraints
+      -Wpartial-fields
 
       -fprint-explicit-foralls
       -fprint-potential-instances
@@ -86,6 +92,10 @@ common exec
     ghc-prof-options:
       -threaded
       "-with-rtsopts=-N -xc"
+  if flag(optimized)
+    ghc-options:
+      -O2
+      -funbox-strict-fields
   build-depends:
       samplelam-interp
 
