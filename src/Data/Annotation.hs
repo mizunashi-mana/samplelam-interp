@@ -1,4 +1,13 @@
-module Data.Annotation where
+module Data.Annotation
+  ( Assoc(..)
+  , (@=)
+  , RevApply(..)
+  , Ann(..)
+  , annBuild
+  , (<:)
+  , nil
+  , getAnnField
+  ) where
 
 import           SampleLam.Prelude
 

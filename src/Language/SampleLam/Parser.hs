@@ -7,6 +7,8 @@ import           Control.Monad
 import qualified Data.HashSet                as HashSet
 import           Data.HFunctor.OpenUnion
 import           Data.HigherOrder
+import           Data.HFunctor.Cofree
+import           Data.Annotation
 import qualified Data.List.NonEmpty          as NonEmpty
 import           Language.SampleLam.Syntax
 import           Text.Parser.Char
@@ -19,7 +21,8 @@ import           Text.Parser.Token.Style     (buildSomeSpaceParser,
                                               haskellCommentStyle)
 import           Text.Trifecta.Combinators
 import           Text.Trifecta.Delta
-import           Text.Trifecta.Indentation
+import           Text.Trifecta.Indentation   (IndentationParserT,
+                                              Token, IndentationParsing)
 
 
 type MonadicTokenParsing m =
@@ -48,13 +51,35 @@ newtype SampleLamParser m a = SampleLamParser
     , IndentationParsing
     )
 
+coerceSampleLamParser
+  :: (IndentationParserT Token m a -> IndentationParserT Token m b)
+  -> SampleLamParser m a -> SampleLamParser m b
+coerceSampleLamParser = coerce
+
 instance DeltaParsing m => TokenParsing (SampleLamParser m) where
   someSpace = SampleLamParser $ buildSomeSpaceParser someSpace haskellCommentStyle
-  nesting = SampleLamParser . nesting . runSampleLamParser
+  nesting = coerceSampleLamParser nesting
   semi = SampleLamParser semi
-  highlight h = SampleLamParser . highlight h . runSampleLamParser
-  token p = (SampleLamParser . token . runSampleLamParser) p <* Tok.whiteSpace
+  highlight h = coerceSampleLamParser $ highlight h
+  token p = coerceSampleLamParser token p <* Tok.whiteSpace
 
+
+type ParsedAstAnn = Ann
+  '[ "sourceDelta" ':> Const Delta
+  ]
+type ParsedAstF = AstWithAnnF ParsedAstAnn
+
+attachParsedAnn :: (MonadicTokenParsing m, Member AstF f)
+  => Compose m (f r) :~> Compose m (ParsedAstF r)
+attachParsedAnn = attachHCofree . hfmap injectU
+  where
+    attachHCofree = Nat \(Compose m) -> Compose . attachDelta $ toHCofree <$> m
+
+    toParsedAstAnn d = annBuild
+      $  #sourceDelta @= Const d
+      <: nil
+
+    toHCofree x d = HCofreeF (toParsedAstAnn d) x
 
 {-
 
@@ -71,41 +96,39 @@ Grammar:
 <program> ::= <expr>
 
 
-<expr> ::= <expr7>
+<expr> ::= <expr8>
 
-<expr7> ::= \ <args> -> <expr>
+<expr8> ::= \ <arg> <args> -> <expr>
           | let <decls> in <expr>
           | if <expr> then <expr> else <expr>
+          | <expr7>
+
+<expr7> ::= <expr6> || <expr7>
           | <expr6>
 
-<args> ::= <var> <args1>
-
-<args1> ::= <var> <args1>
-          |
-
-<expr6> ::= <expr5> || <expr6>
+<expr6> ::= <expr5> && <expr6>
           | <expr5>
 
-<expr5> ::= <expr4> && <expr5>
+<expr5> ::= <expr4> == <expr5>
+          | <expr4> /= <expr5>
           | <expr4>
 
-<expr4> ::= <expr3> == <expr4>
-          | <expr3> /= <expr4>
+<expr4> ::= <expr3> <= <expr4>
+          | <expr3> <  <expr4>
+          | <expr3> >= <expr4>
+          | <expr3> >  <expr4>
           | <expr3>
 
-<expr3> ::= <expr2> <= <expr3>
-          | <expr2> <  <expr3>
-          | <expr2> >= <expr3>
-          | <expr2> >  <expr3>
+<expr3> ::= <expr2> + <expr3>
+          | <expr2> - <expr3>
           | <expr2>
 
-<expr2> ::= <expr1> + <expr2>
-          | <expr1> - <expr2>
+<expr2> ::= <expr1> * <expr2>
+          | <expr1> / <expr2>
+          | <expr1> % <expr2>
           | <expr1>
 
-<expr1> ::= <expr0> * <expr1>
-          | <expr0> / <expr1>
-          | <expr0> % <expr1>
+<expr1> ::= <expr1> <expr0>
           | <expr0>
 
 <expr0> ::= <factor>
@@ -126,12 +149,12 @@ Grammar:
 <semidecls1> ::= ; <semidecls>
                |
 
-<decl> ::= <decllhs> = <expr>
+<decl> ::= <var> <args> = <expr>
 
-<decllhs> ::= <var> <decllhs1>
+<args> ::= <arg> <args>
+         |
 
-<decllhs1> ::= <var> <decllhs1>
-             |
+<arg> ::= <var>
 
 
 <var> ::= <identifier>
@@ -148,9 +171,20 @@ data GrammarUnitsF m r = GrammarUnitsF
   , bool       :: m Bool
   , integer    :: m Integer
 
-  , program    :: r 'ExprTag
-  , expr       :: r 'ExprTag
-  , exprs      :: NonEmpty.NonEmpty (r 'ExprTag)
+  , program    :: m (r 'ExprTag)
+  , expr       :: m (r 'ExprTag)
+  , exprs      :: NonEmpty.NonEmpty (m (r 'ExprTag))
+  , factor     :: m (r 'ExprTag)
+  , evar       :: m (r 'ExprTag)
+
+  , decls :: m [r 'DeclTag]
+  , decl :: m (r 'DeclTag)
+  , args :: m [r 'VarTag]
+  , arg :: m (r 'VarTag)
+
+  , var :: m (r 'VarTag)
+
+  , lit :: m (r 'LitTag)
   }
 
 
@@ -160,24 +194,30 @@ identStyle = IdentifierStyle
   , _styleStart = lower <|> oneOf "_"
   , _styleLetter = alphaNum <|> oneOf "_'"
   , _styleReserved = HashSet.fromList
-    [ "let", "in", "if", "then", "else"
+    [ "let", "in"
+    , "if", "then", "else"
+    , "True", "False"
     ]
   , _styleHighlight = Highlight.Identifier
   , _styleReservedHighlight = Highlight.ReservedIdentifier
   }
 
-grammarUnitsF :: MonadicTokenParsing m
+grammarUnitsF :: forall m r. MonadicTokenParsing m
   => (forall f. Member AstF f => Compose m (f r) :~> Compose m r)
   -> GrammarUnitsF m r -> GrammarUnitsF m r
-grammarUnitsF _ us = GrammarUnitsF {..}
+grammarUnitsF inj us = GrammarUnitsF {..}
   where
+    lackInj :: forall f i. Member AstF f => m (f r i) -> m (r i)
+    lackInj = coerce (unNat (inj @f) @i)
+
+
     identifier = Tok.ident identStyle
 
     reserved   = Tok.reserve identStyle
 
     bool
-      =   string "True" *> pure True
-      <|> string "False" *> pure False
+      =   reserved "True" *> pure True
+      <|> reserved "False" *> pure False
 
     integer = Tok.integer
 
@@ -188,9 +228,66 @@ grammarUnitsF _ us = GrammarUnitsF {..}
 
     exprs = undefined
 
+    factor
+      =   getField @"evar" us
+      <|> lackInj (litExprF us)
+      <|> Tok.parens (getField @"expr" us)
+
+    evar = lackInj $ varExprF us
+
+
+    decls = undefined
+
+    decl = lackInj $ declF us
+
+    args
+      =   (:) <$> getField @"arg" us <*> getField @"args" us
+      <|> pure []
+
+    arg = getField @"var" us
+
+
+    var = lackInj $ varF us
+
+
+    lit = lackInj $ litF us
+
+
+lamAbsF :: MonadicTokenParsing m => GrammarUnitsF m r -> m (ExprF r 'ExprTag)
+lamAbsF GrammarUnitsF{..} = Tok.symbol "\\" $> LamAbsF
+  <*> args
+  <*> (Tok.symbol "->" *> expr)
+
+appF :: MonadicTokenParsing m => GrammarUnitsF m r -> m (ExprF r 'ExprTag)
+appF GrammarUnitsF{..} = AppF <$> expr <*> expr
+
+letF :: MonadicTokenParsing m => GrammarUnitsF m r -> m (ExprF r 'ExprTag)
+letF GrammarUnitsF{..} = reserved "let" $> LetF
+  <*> decls
+  <*> (reserved "in" *> expr)
+
+ifF :: MonadicTokenParsing m => GrammarUnitsF m r -> m (ExprF r 'ExprTag)
+ifF GrammarUnitsF{..} = reserved "if" $> IfF
+  <*> expr
+  <*> (reserved "then" *> expr)
+  <*> (reserved "else" *> expr)
+
+varExprF :: MonadicTokenParsing m => GrammarUnitsF m r -> m (ExprF r 'ExprTag)
+varExprF GrammarUnitsF{..} = VarExprF <$> var
+
+litExprF :: MonadicTokenParsing m => GrammarUnitsF m r -> m (ExprF r 'ExprTag)
+litExprF GrammarUnitsF{..} = LitExprF <$> lit
+
+
+declF :: MonadicTokenParsing m => GrammarUnitsF m r -> m (DeclF r 'DeclTag)
+declF GrammarUnitsF{..} = DeclF
+  <$> var <*> args
+  <*> (Tok.symbol "=" *> expr)
+
 
 varF :: MonadicTokenParsing m => GrammarUnitsF m r -> m (VarF r 'VarTag)
 varF GrammarUnitsF{..} = VarF <$> identifier
+
 
 litF :: MonadicTokenParsing m => GrammarUnitsF m r -> m (LitF r 'LitTag)
 litF GrammarUnitsF{..}

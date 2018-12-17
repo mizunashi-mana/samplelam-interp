@@ -3,6 +3,8 @@ module Language.SampleLam.Syntax where
 import SampleLam.Prelude
 
 import Data.HigherOrder
+import Data.HFunctor.Cofree
+import Data.HFunctor.OpenUnion
 
 
 data AstTag
@@ -14,10 +16,11 @@ data AstTag
 
 
 type AstF = '[ExprF, DeclF, VarF, LitF]
+type AstWithAnnF = HCofreeF (HUnion AstF)
 
 
 data ExprF r i where
-  LamAbsF :: r 'VarTag -> r 'ExprTag -> ExprF r 'ExprTag
+  LamAbsF :: [r 'VarTag] -> r 'ExprTag -> ExprF r 'ExprTag
   AppF :: r 'ExprTag -> r 'ExprTag -> ExprF r 'ExprTag
   LetF :: [r 'DeclTag] -> r 'ExprTag -> ExprF r 'ExprTag
   IfF :: r 'ExprTag -> r 'ExprTag -> r 'ExprTag -> ExprF r 'ExprTag
@@ -30,7 +33,7 @@ deriving instance (forall i. Show (r i)) => Show (ExprF r j)
 
 instance HFunctor ExprF where
   hfmap (Nat f) = Nat \case
-    LamAbsF v e -> LamAbsF (f v) (f e)
+    LamAbsF vs e -> LamAbsF (f <$> vs) (f e)
     AppF e1 e2  -> AppF (f e1) (f e2)
     LetF ds e   -> LetF (f <$> ds) (f e)
     IfF c e1 e2 -> IfF (f c) (f e1) (f e2)
@@ -39,7 +42,7 @@ instance HFunctor ExprF where
 
 
 data DeclF r i where
-  DeclF :: r 'VarTag -> r 'ExprTag -> DeclF r 'DeclTag
+  DeclF :: r 'VarTag -> [r 'VarTag] -> r 'ExprTag -> DeclF r 'DeclTag
 
 deriving instance (forall i. Eq (r i)) => Eq (DeclF r j)
 deriving instance (forall i. Ord (r i)) => Ord (DeclF r j)
@@ -47,7 +50,7 @@ deriving instance (forall i. Show (r i)) => Show (DeclF r j)
 
 instance HFunctor DeclF where
   hfmap (Nat f) = Nat \case
-    DeclF v e -> DeclF (f v) (f e)
+    DeclF v as e -> DeclF (f v) (f <$> as) (f e)
 
 
 data VarF r i where
