@@ -21,7 +21,8 @@ type AstWithAnnF = HCofreeF (HUnion AstF)
 
 data ExprF r i where
   LamAbsF :: [r 'VarTag] -> r 'ExprTag -> ExprF r 'ExprTag
-  AppF :: r 'ExprTag -> r 'ExprTag -> ExprF r 'ExprTag
+  AppF :: r 'ExprTag -> [r 'ExprTag] -> ExprF r 'ExprTag
+  InfixAppF :: r 'ExprTag -> r 'VarTag -> r 'ExprTag -> ExprF r 'ExprTag
   LetF :: [r 'DeclTag] -> r 'ExprTag -> ExprF r 'ExprTag
   IfF :: r 'ExprTag -> r 'ExprTag -> r 'ExprTag -> ExprF r 'ExprTag
   VarExprF :: r 'VarTag -> ExprF r 'ExprTag
@@ -33,12 +34,13 @@ deriving instance (forall i. Show (r i)) => Show (ExprF r j)
 
 instance HFunctor ExprF where
   hfmap (Nat f) = Nat \case
-    LamAbsF vs e -> LamAbsF (f <$> vs) (f e)
-    AppF e1 e2  -> AppF (f e1) (f e2)
-    LetF ds e   -> LetF (f <$> ds) (f e)
-    IfF c e1 e2 -> IfF (f c) (f e1) (f e2)
-    VarExprF v  -> VarExprF (f v)
-    LitExprF l  -> LitExprF (f l)
+    LamAbsF vs e      -> LamAbsF (f <$> vs) (f e)
+    AppF e es         -> AppF (f e) (f <$> es)
+    InfixAppF e1 v e2 -> InfixAppF (f e1) (f v) (f e2)
+    LetF ds e         -> LetF (f <$> ds) (f e)
+    IfF c e1 e2       -> IfF (f c) (f e1) (f e2)
+    VarExprF v        -> VarExprF (f v)
+    LitExprF l        -> LitExprF (f l)
 
 
 data DeclF r i where

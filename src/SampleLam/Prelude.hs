@@ -2,7 +2,6 @@ module SampleLam.Prelude
   ( module Prelude
   , module Data.Kind
   , module Control.Category
-  , module Data.Functor
   , module Data.Coerce
   , module GHC.Generics
   , module GHC.OverloadedLabels
@@ -11,7 +10,6 @@ module SampleLam.Prelude
 
 import           Control.Category
 import           Data.Coerce
-import           Data.Functor
 import           Data.Kind
 import           GHC.Generics         (Generic (..))
 import           GHC.OverloadedLabels (IsLabel (..))

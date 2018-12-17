@@ -9,7 +9,9 @@ import           Data.HFunctor.OpenUnion
 import           Data.HigherOrder
 import           Data.HFunctor.Cofree
 import           Data.Annotation
-import qualified Data.List.NonEmpty          as NonEmpty
+import           Data.Functor
+import           Data.List.NonEmpty (NonEmpty(..))
+import qualified Data.List.NonEmpty as NonEmpty
 import           Language.SampleLam.Syntax
 import           Text.Parser.Char
 import           Text.Parser.Combinators
@@ -96,42 +98,42 @@ Grammar:
 <program> ::= <expr>
 
 
-<expr> ::= <expr8>
+<expr> ::= <expr7>
 
-<expr8> ::= \ <arg> <args> -> <expr>
+<expr7> ::= \ <arg> <args> -> <expr>
           | let <decls> in <expr>
           | if <expr> then <expr> else <expr>
-          | <expr7>
-
-<expr7> ::= <expr6> || <expr7>
           | <expr6>
 
-<expr6> ::= <expr5> && <expr6>
+<expr6> ::= <expr5> || <expr6>
           | <expr5>
 
-<expr5> ::= <expr4> == <expr5>
-          | <expr4> /= <expr5>
+<expr5> ::= <expr4> && <expr5>
           | <expr4>
 
-<expr4> ::= <expr3> <= <expr4>
-          | <expr3> <  <expr4>
-          | <expr3> >= <expr4>
-          | <expr3> >  <expr4>
+<expr4> ::= <expr3> == <expr4>
+          | <expr3> /= <expr4>
           | <expr3>
 
-<expr3> ::= <expr2> + <expr3>
-          | <expr2> - <expr3>
+<expr3> ::= <expr2> <= <expr3>
+          | <expr2> <  <expr3>
+          | <expr2> >= <expr3>
+          | <expr2> >  <expr3>
           | <expr2>
 
-<expr2> ::= <expr1> * <expr2>
-          | <expr1> / <expr2>
-          | <expr1> % <expr2>
+<expr2> ::= <expr1> + <expr2>
+          | <expr1> - <expr2>
           | <expr1>
 
-<expr1> ::= <expr1> <expr0>
+<expr1> ::= <expr0> * <expr1>
+          | <expr0> / <expr1>
+          | <expr0> % <expr1>
           | <expr0>
 
-<expr0> ::= <factor>
+<expr0> ::= <fexpr>
+
+<fexpr> ::= <factor> <fexpr>
+          | <factor>
 
 <factor> ::= <evar>
            | <lit>
@@ -165,6 +167,18 @@ Grammar:
 
 -}
 
+type ExprUnitsF m r =
+  m (r 'ExprTag) -> m (r 'ExprTag) -> m (r 'ExprTag)
+
+fixExprUnits :: GrammarUnitsF m r -> [ExprUnitsF m r] -> [(ExprUnitsF m r, m (r 'ExprTag))]
+fixExprUnits GrammarUnitsF{..} = go exprs
+  where
+    go []           []     = []
+    go ((_, ce):es) (f:fs) = case es of
+      []        -> [(f, f ce factor)]
+      (_, pe):_ -> (f, f ce pe) : go es fs
+    go _      _                    = error "unreachable"
+
 data GrammarUnitsF m r = GrammarUnitsF
   { identifier :: m String
   , reserved   :: String -> m ()
@@ -173,7 +187,9 @@ data GrammarUnitsF m r = GrammarUnitsF
 
   , program    :: m (r 'ExprTag)
   , expr       :: m (r 'ExprTag)
-  , exprs      :: NonEmpty.NonEmpty (m (r 'ExprTag))
+  , exprs      :: [(ExprUnitsF m r, m (r 'ExprTag))]
+  , expr0      :: m (r 'ExprTag)
+  , fexpr      :: m (NonEmpty (r 'ExprTag))
   , factor     :: m (r 'ExprTag)
   , evar       :: m (r 'ExprTag)
 
@@ -186,7 +202,6 @@ data GrammarUnitsF m r = GrammarUnitsF
 
   , lit :: m (r 'LitTag)
   }
-
 
 identStyle :: MonadicTokenParsing m => IdentifierStyle m
 identStyle = IdentifierStyle
@@ -224,9 +239,57 @@ grammarUnitsF inj us = GrammarUnitsF {..}
 
     program = getField @"expr" us
 
-    expr = NonEmpty.head $ getField @"exprs" us
 
-    exprs = undefined
+    expr = case getField @"exprs" us of
+      []       -> getField @"expr0" us
+      (_, p):_ -> p
+
+    expr0 = lackInj
+      $ getField @"fexpr" us <&> \(e :| es) -> AppF e es
+
+    exprs = fixExprUnits us
+      [ \_ p -> lackInj
+          (   lamAbsF us
+          <|> letF us
+          <|> ifF us
+          )
+          <|> p
+      , \c p -> lackInj
+          (   InfixAppF <$> p <*> lackInj (varSymF us "||") <*> c
+          )
+          <|> p
+      , \c p -> lackInj
+          (   InfixAppF <$> p <*> lackInj (varSymF us "&&") <*> c
+          )
+          <|> p
+      , \c p -> lackInj
+          (   InfixAppF <$> p <*> lackInj (varSymF us "==") <*> c
+          <|> InfixAppF <$> p <*> lackInj (varSymF us "/=") <*> c
+          )
+          <|> p
+      , \c p -> lackInj
+          (   InfixAppF <$> p <*> lackInj (varSymF us "<=") <*> c
+          <|> InfixAppF <$> p <*> lackInj (varSymF us "<")  <*> c
+          <|> InfixAppF <$> p <*> lackInj (varSymF us ">=") <*> c
+          <|> InfixAppF <$> p <*> lackInj (varSymF us ">")  <*> c
+          )
+          <|> p
+      , \c p -> lackInj
+          (   InfixAppF <$> p <*> lackInj (varSymF us "+") <*> c
+          <|> InfixAppF <$> p <*> lackInj (varSymF us "-") <*> c
+          )
+          <|> p
+      , \c p -> lackInj
+          (   InfixAppF <$> p <*> lackInj (varSymF us "*") <*> c
+          <|> InfixAppF <$> p <*> lackInj (varSymF us "/") <*> c
+          <|> InfixAppF <$> p <*> lackInj (varSymF us "%") <*> c
+          )
+          <|> p
+      ]
+
+    fexpr
+      =   NonEmpty.cons <$> getField @"factor" us <*> getField @"fexpr" us
+      <|> pure <$> getField @"factor" us
 
     factor
       =   getField @"evar" us
@@ -250,16 +313,15 @@ grammarUnitsF inj us = GrammarUnitsF {..}
     var = lackInj $ varF us
 
 
-    lit = lackInj $ litF us
+    lit = lackInj
+      $   boolLitF us
+      <|> intLitF us
 
 
 lamAbsF :: MonadicTokenParsing m => GrammarUnitsF m r -> m (ExprF r 'ExprTag)
 lamAbsF GrammarUnitsF{..} = Tok.symbol "\\" $> LamAbsF
   <*> args
   <*> (Tok.symbol "->" *> expr)
-
-appF :: MonadicTokenParsing m => GrammarUnitsF m r -> m (ExprF r 'ExprTag)
-appF GrammarUnitsF{..} = AppF <$> expr <*> expr
 
 letF :: MonadicTokenParsing m => GrammarUnitsF m r -> m (ExprF r 'ExprTag)
 letF GrammarUnitsF{..} = reserved "let" $> LetF
@@ -288,8 +350,12 @@ declF GrammarUnitsF{..} = DeclF
 varF :: MonadicTokenParsing m => GrammarUnitsF m r -> m (VarF r 'VarTag)
 varF GrammarUnitsF{..} = VarF <$> identifier
 
+varSymF :: MonadicTokenParsing m => GrammarUnitsF m r -> String -> m (VarF r 'VarTag)
+varSymF GrammarUnitsF{..} s = VarF <$> (Tok.symbol s *> pure s)
 
-litF :: MonadicTokenParsing m => GrammarUnitsF m r -> m (LitF r 'LitTag)
-litF GrammarUnitsF{..}
-  =   BoolLitF <$> bool
-  <|> IntLitF <$> integer
+
+boolLitF :: MonadicTokenParsing m => GrammarUnitsF m r -> m (LitF r 'LitTag)
+boolLitF GrammarUnitsF{..} = BoolLitF <$> bool
+
+intLitF :: MonadicTokenParsing m => GrammarUnitsF m r -> m (LitF r 'LitTag)
+intLitF GrammarUnitsF{..} = IntLitF <$> integer
