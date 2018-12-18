@@ -112,11 +112,14 @@ library
       SampleLam.Prelude
       Data.Nat
       Data.HFunctor
+      Data.HFunctor.Identity
       Data.HFunctor.Cofree
-      Data.HFunctor.HFix
+      Data.HFunctor.Fix
       Data.HFunctor.OpenUnion
+      Data.HFunctor.Unsafe
       Data.HigherOrder
       Data.Annotation
+      Data.Membership
       Language.SampleLam.Syntax
       Language.SampleLam.Core
       Language.SampleLam.Printer

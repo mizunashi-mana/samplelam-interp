@@ -13,8 +13,8 @@ import SampleLam.Prelude
 
 import Data.Nat
 import Data.HFunctor
-import Data.Extensible.Internal
 import Data.Constraint
+import Data.Membership
 
 
 data HUnion fs r i where
@@ -31,10 +31,12 @@ decomp (Nat f) (Nat g) = Nat \(HUnion n x) ->
   leadership n (\Refl -> f x) (\m -> g $ HUnion m x)
 
 weaken :: HUnion fs r :~> HUnion (f ': fs) r
-weaken = Nat \(HUnion n x) -> HUnion (navNext n) x
+weaken = Nat \case
+  HUnion n x -> HUnion (navNext n) x
 
 absurdU :: HUnion '[] r :~> a
-absurdU = Nat \(HUnion n _) -> impossibleMembership n
+absurdU = Nat \case
+  HUnion n _ -> impossibleMembership n
 
 
 instance HFunctor (HUnion '[]) where
@@ -42,16 +44,6 @@ instance HFunctor (HUnion '[]) where
 
 instance (HFunctor f, HFunctor (HUnion fs)) => HFunctor (HUnion (f ': fs)) where
   hfmap f = decomp (injectHere . hfmap f) (weaken . hfmap f)
-
-
-class MemberCtx c fs r i where
-  toMemberCtx :: f r i -> Membership fs f -> Dict (c (f r i))
-
-instance MemberCtx c '[] r i where
-  toMemberCtx _ n = impossibleMembership n
-
-instance (c (f r i), MemberCtx c fs r i) => MemberCtx c (f ': fs) r i where
-  toMemberCtx x n = leadership n (\Refl -> Dict) (toMemberCtx x)
 
 
 instance MemberCtx Eq fs r i => Eq (HUnion fs r i) where

@@ -18,6 +18,9 @@ data AstTag
 type AstF = '[ExprF, DeclF, VarF, LitF]
 type AstWithAnnF = HCofreeF (HUnion AstF)
 
+injectAstF :: Member AstF f => f r :~> AstWithAnnF (Const ()) r
+injectAstF = Nat (HCofreeF $ Const ()) . injectU
+
 
 data ExprF r i where
   LamAbsF :: [r 'VarTag] -> r 'ExprTag -> ExprF r 'ExprTag

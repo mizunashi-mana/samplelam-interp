@@ -1,4 +1,4 @@
-module Data.HFunctor.HFix where
+module Data.HFunctor.Fix where
 
 import SampleLam.Prelude
 
