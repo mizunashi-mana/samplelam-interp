@@ -28,17 +28,19 @@ common general
       Paths_samplelam_interp
   build-depends:
       base
+    , bytestring
+    , utf8-string
+    , unordered-containers
     , constraints
     , extensible
-    , unordered-containers
     , lens
+    , profunctors
+    , reducers
     , parsers
     , trifecta
     , indentation-trifecta
     , bound
     , prettyprinter
-    , profunctors
-    , reducers
   ghc-options:
       -Wall
       -Wcompat

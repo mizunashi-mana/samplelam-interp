@@ -30,6 +30,8 @@ import           Text.Trifecta.Indentation   (IndentationParserT,
                                               Token, IndentationParsing,
                                               IndentationState)
 import qualified Text.Trifecta.Indentation   as Trifecta
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.UTF8 as BS
 
 
 type MonadicTokenParsing m =
@@ -79,6 +81,10 @@ runSampleLamParser (SampleLamParser p) = Trifecta.runParser . Trifecta.evalInden
 
 parseSampleLamString :: SampleLamParser Trifecta.Parser a -> String -> Trifecta.Result a
 parseSampleLamString p = runSampleLamParser p emptyIndentationState mempty
+
+parseSampleLamFile :: SampleLamParser Trifecta.Parser a -> FilePath -> IO (Trifecta.Result a)
+parseSampleLamFile p fn = BS.readFile fn <&>
+  runSampleLamParser p emptyIndentationState (Directed (BS.fromString fn) 0 0 0 0)
 
 
 type ParsedAstAnn = Ann
