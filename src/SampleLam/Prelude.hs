@@ -12,10 +12,10 @@ module SampleLam.Prelude
 
 import           Control.Category
 import           Data.Coerce
-import           Data.Kind
+import           Data.Foldable        (foldl')
 import           Data.Function        hiding (id, (.))
+import           Data.Kind
 import           GHC.Generics         (Generic (..))
 import           GHC.OverloadedLabels (IsLabel (..))
 import           GHC.Records          (HasField (..))
-import           Prelude              hiding (id, (.), foldl)
-import           Data.Foldable (foldl')
+import           Prelude              hiding (foldl, id, (.))
