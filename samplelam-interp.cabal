@@ -41,6 +41,8 @@ common general
     , indentation-trifecta
     , bound
     , prettyprinter
+    , prettyprinter-ansi-terminal
+    , prettyprinter-convert-ansi-wl-pprint
   ghc-options:
       -Wall
       -Wcompat
@@ -114,6 +116,7 @@ library
   hs-source-dirs: src
   exposed-modules:
       SampleLam.Prelude
+      SampleLam.Command
       Data.Nat
       Data.HFunctor
       Data.HFunctor.Identity

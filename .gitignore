@@ -1,4 +1,4 @@
 # for Cabal
 /dist*
 .ghc.*
-*.freeze
+/cabal.config

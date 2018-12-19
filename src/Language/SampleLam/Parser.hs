@@ -27,17 +27,21 @@ import qualified Text.Trifecta               as Trifecta
 import           Text.Trifecta.Combinators
 import           Text.Trifecta.Delta
 import           Text.Trifecta.Indentation   (IndentationParserT,
-                                              Token, IndentationParsing,
+                                              Token, IndentationParsing (..),
                                               IndentationState)
 import qualified Text.Trifecta.Indentation   as Trifecta
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.UTF8 as BS
+import qualified Data.Text.Prettyprint.Convert.AnsiWlPprint as ConvertDoc
+import           Data.Text.Prettyprint.Doc (Pretty (..), Doc, unAnnotate)
+import           Data.Text.Prettyprint.Doc.Render.Terminal (AnsiStyle)
 
 
 type MonadicTokenParsing m =
   ( Parsing m
   , TokenParsing m
   , CharParsing m
+  , IndentationParsing m
   , DeltaParsing m
   , MonadPlus m
   )
@@ -72,19 +76,34 @@ instance DeltaParsing m => TokenParsing (SampleLamParser m) where
   highlight h = coerceSampleLamParser $ highlight h
   token p = coerceSampleLamParser token p <* Tok.whiteSpace
 
-emptyIndentationState :: IndentationState
-emptyIndentationState = Trifecta.mkIndentationState 0 Trifecta.infIndentation True Trifecta.Ge
+initialIndentationState :: IndentationState
+initialIndentationState = Trifecta.mkIndentationState 0 Trifecta.infIndentation True Trifecta.Ge
+
+
+data ParseError = ParseError
+  { parseErrDoc :: Doc AnsiStyle
+  , parseErrDeltas :: [Delta]
+  } deriving (Show)
+
+instance Pretty ParseError where
+  pretty = unAnnotate . parseErrDoc
 
 runSampleLamParser :: Reducer t Trifecta.Rope
-  => SampleLamParser Trifecta.Parser a -> IndentationState -> Delta -> t -> Trifecta.Result a
-runSampleLamParser (SampleLamParser p) = Trifecta.runParser . Trifecta.evalIndentationParserT p
+  => SampleLamParser Trifecta.Parser a -> IndentationState -> Delta -> t -> Either ParseError a
+runSampleLamParser (SampleLamParser p) i d s =
+  case Trifecta.runParser (Trifecta.evalIndentationParserT p i) d s of
+    Trifecta.Success x   -> Right x
+    Trifecta.Failure err -> Left $ ParseError
+      { parseErrDoc = ConvertDoc.fromAnsiWlPprint $ Trifecta._errDoc err
+      , parseErrDeltas = Trifecta._errDeltas err
+      }
 
-parseSampleLamString :: SampleLamParser Trifecta.Parser a -> String -> Trifecta.Result a
-parseSampleLamString p = runSampleLamParser p emptyIndentationState mempty
+parseSampleLamString :: SampleLamParser Trifecta.Parser a -> String -> Either ParseError a
+parseSampleLamString p = runSampleLamParser p initialIndentationState mempty
 
-parseSampleLamFile :: SampleLamParser Trifecta.Parser a -> FilePath -> IO (Trifecta.Result a)
+parseSampleLamFile :: SampleLamParser Trifecta.Parser a -> FilePath -> IO (Either ParseError a)
 parseSampleLamFile p fn = BS.readFile fn <&>
-  runSampleLamParser p emptyIndentationState (Directed (BS.fromString fn) 0 0 0 0)
+  runSampleLamParser p initialIndentationState (Directed (BS.fromString fn) 0 0 0 0)
 
 
 type ParsedAstAnn = Ann
@@ -226,6 +245,7 @@ data GrammarUnitsF m r = GrammarUnitsF
   , evar       :: m (r 'ExprTag)
 
   , decls :: m [r 'DeclTag]
+  , semidecls :: m [r 'DeclTag]
   , decl :: m (r 'DeclTag)
   , args :: m [r 'VarTag]
   , arg :: m (r 'VarTag)
@@ -339,7 +359,14 @@ grammarUnitsF inj ~us@GrammarUnitsF{..} = GrammarUnitsF
   , evar = lackInj $ varExprF us
 
 
-  , decls = undefined
+  , decls
+    =   Tok.symbol "{" *> ((:) <$> decl <*> many (some (Tok.symbol ";") *> decl) <|> pure []) <* Tok.symbol "}"
+    <|> localIndentation Trifecta.Gt (many $ absoluteIndentation decl)
+
+  , semidecls
+    =   (:) <$> decl <*> (Tok.symbol ";" *> semidecls <|> pure [])
+    <|> Tok.symbol ";" *> semidecls
+    <|> pure []
 
   , decl = lackInj $ declF us
 
