@@ -22,15 +22,14 @@ import           Text.Parser.Token           (IdentifierStyle (..),
 import qualified Text.Parser.Token           as Tok
 import qualified Text.Parser.Token.Highlight as Highlight
 import           Text.Trifecta.Combinators
-import           Text.Trifecta.Delta
 import           Text.Trifecta.Indentation (IndentationParsing (..))
 import qualified Text.Trifecta.Indentation as Trifecta
 
 
 type MonadicTokenParsing m =
   ( Parsing m
-  , TokenParsing m
   , CharParsing m
+  , TokenParsing m
   , IndentationParsing m
   , DeltaParsing m
   , MonadPlus m
@@ -38,7 +37,7 @@ type MonadicTokenParsing m =
 
 
 type ParsedAstAnn = Ann
-  '[ "sourceDelta" ':> Const Delta
+  '[ "sourcePosSpan" ':> Const Span
   ]
 type ParsedAstF = AstWithAnnF ParsedAstAnn
 
@@ -46,17 +45,17 @@ attachParsedAnn :: (MonadicTokenParsing m, Member AstF f)
   => Compose m (f r) :~> Compose m (ParsedAstF r)
 attachParsedAnn = attachHCofree . hfmap injectU
   where
-    attachHCofree = Nat \(Compose m) -> Compose . attachDelta $ toHCofree <$> m
+    attachHCofree = Nat \(Compose m) -> Compose . attachSpan $ toHCofree <$> m
 
-    toParsedAstAnn d = annBuild
-      $  #sourceDelta @= Const d
+    toParsedAstAnn sp = annBuild
+      $  #sourcePosSpan @= Const sp
       <: nil
 
     toHCofree x d = HCofreeF (toParsedAstAnn d) x
 
 
 programParser :: MonadicTokenParsing m => m (HFix ParsedAstF 'ExprTag)
-programParser = program grammarUnits
+programParser = Tok.whiteSpace *> program grammarUnits <* eof
 
 grammarUnits :: MonadicTokenParsing m => GrammarUnitsF m (HFix ParsedAstF)
 grammarUnits = fix $ grammarUnitsF (hfmapCoerce . attachParsedAnn)
@@ -84,7 +83,8 @@ Lexical Token:
 <reserved>   ::= "let" | "in" | "if" | "then" | "else"
 <identifier> ::= ([a-z_] [a-zA-Z_']*) - (<reserved>)
 <bool>       ::= "True" | "False"
-<integer>    ::= [0-9]+ (("e"|"E") ("+"|"-")? [0-9]*)?
+<integer>    ::= <natural>
+<natural>    ::= octal / hex / decimal natural number
 
 
 Grammar:
@@ -215,7 +215,7 @@ grammarUnitsF inj ~us@GrammarUnitsF{..} = GrammarUnitsF
   , integer = Tok.natural
 
 
-  , program = expr <* eof
+  , program = expr
 
   , expr = NonEmpty.last $ expr0 :| fmap snd exprs
 

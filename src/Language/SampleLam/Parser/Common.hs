@@ -1,4 +1,15 @@
-module Language.SampleLam.Parser.Common where
+module Language.SampleLam.Parser.Common
+  ( SampleLamParser
+  , ParseError (..)
+  , runSampleLamParser
+  , parseSampleLamFile
+  , parseSampleLamString
+
+  , initialIndentationState
+
+  , attachSpan
+  , Span (..)
+  ) where
 
 import           SampleLam.Prelude
 
@@ -23,8 +34,8 @@ import           Text.Trifecta.Indentation
 
 
 newtype SampleLamParser m a = SampleLamParser
-  { getSampleLamParser :: IndentationParserT Token m a
-  } deriving
+  (IndentationParserT Token m a)
+  deriving
     ( Functor
     , Applicative
     , Monad
@@ -45,7 +56,7 @@ instance DeltaParsing m => TokenParsing (SampleLamParser m) where
   someSpace = SampleLamParser $ buildSomeSpaceParser someSpace haskellCommentStyle
   nesting = coerceSampleLamParser nesting
   semi = SampleLamParser semi
-  highlight h = coerceSampleLamParser $ highlight h
+  highlight = coerceSampleLamParser . highlight
   token p = coerceSampleLamParser token p <* whiteSpace
 
 initialIndentationState :: IndentationState
@@ -78,5 +89,6 @@ parseSampleLamFile p fn = BS.readFile fn <&>
   runSampleLamParser p initialIndentationState (Directed (BS.fromString fn) 0 0 0 0)
 
 
-attachDelta :: DeltaParsing m => m (Delta -> a) -> m a
-attachDelta p = p <*> position
+attachSpan :: DeltaParsing m => m (Span -> a) -> m a
+attachSpan p = spanned p <&> \case
+  f :~ x -> f x
