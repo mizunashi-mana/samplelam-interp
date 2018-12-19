@@ -2,6 +2,7 @@ module Language.SampleLam.Parser where
 
 import           SampleLam.Prelude
 
+import           Language.SampleLam.Parser.Common
 import           Control.Applicative
 import           Control.Monad
 import qualified Data.HashSet                as HashSet
@@ -14,27 +15,16 @@ import           Data.Functor
 import           Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NonEmpty
 import           Language.SampleLam.Syntax
-import           Data.Semigroup.Reducer (Reducer)
 import           Text.Parser.Char
 import           Text.Parser.Combinators
 import           Text.Parser.Token           (IdentifierStyle (..),
                                               TokenParsing (..))
 import qualified Text.Parser.Token           as Tok
 import qualified Text.Parser.Token.Highlight as Highlight
-import           Text.Parser.Token.Style     (buildSomeSpaceParser,
-                                              haskellCommentStyle)
-import qualified Text.Trifecta               as Trifecta
 import           Text.Trifecta.Combinators
 import           Text.Trifecta.Delta
-import           Text.Trifecta.Indentation   (IndentationParserT,
-                                              Token, IndentationParsing (..),
-                                              IndentationState)
-import qualified Text.Trifecta.Indentation   as Trifecta
-import qualified Data.ByteString as BS
-import qualified Data.ByteString.UTF8 as BS
-import qualified Data.Text.Prettyprint.Convert.AnsiWlPprint as ConvertDoc
-import           Data.Text.Prettyprint.Doc (Pretty (..), Doc, unAnnotate)
-import           Data.Text.Prettyprint.Doc.Render.Terminal (AnsiStyle)
+import           Text.Trifecta.Indentation (IndentationParsing (..))
+import qualified Text.Trifecta.Indentation as Trifecta
 
 
 type MonadicTokenParsing m =
@@ -45,65 +35,6 @@ type MonadicTokenParsing m =
   , DeltaParsing m
   , MonadPlus m
   )
-
-attachDelta :: MonadicTokenParsing m => m (Delta -> a) -> m a
-attachDelta p = p <*> position
-
-
-newtype SampleLamParser m a = SampleLamParser
-  { getSampleLamParser :: IndentationParserT Token m a
-  } deriving
-    ( Functor
-    , Applicative
-    , Monad
-    , Alternative
-    , MonadPlus
-    , Parsing
-    , CharParsing
-    , DeltaParsing
-    , IndentationParsing
-    )
-
-coerceSampleLamParser
-  :: (IndentationParserT Token m a -> IndentationParserT Token m b)
-  -> SampleLamParser m a -> SampleLamParser m b
-coerceSampleLamParser = coerce
-
-instance DeltaParsing m => TokenParsing (SampleLamParser m) where
-  someSpace = SampleLamParser $ buildSomeSpaceParser someSpace haskellCommentStyle
-  nesting = coerceSampleLamParser nesting
-  semi = SampleLamParser semi
-  highlight h = coerceSampleLamParser $ highlight h
-  token p = coerceSampleLamParser token p <* Tok.whiteSpace
-
-initialIndentationState :: IndentationState
-initialIndentationState = Trifecta.mkIndentationState 0 Trifecta.infIndentation True Trifecta.Ge
-
-
-data ParseError = ParseError
-  { parseErrDoc :: Doc AnsiStyle
-  , parseErrDeltas :: [Delta]
-  } deriving (Show)
-
-instance Pretty ParseError where
-  pretty = unAnnotate . parseErrDoc
-
-runSampleLamParser :: Reducer t Trifecta.Rope
-  => SampleLamParser Trifecta.Parser a -> IndentationState -> Delta -> t -> Either ParseError a
-runSampleLamParser (SampleLamParser p) i d s =
-  case Trifecta.runParser (Trifecta.evalIndentationParserT p i) d s of
-    Trifecta.Success x   -> Right x
-    Trifecta.Failure err -> Left $ ParseError
-      { parseErrDoc = ConvertDoc.fromAnsiWlPprint $ Trifecta._errDoc err
-      , parseErrDeltas = Trifecta._errDeltas err
-      }
-
-parseSampleLamString :: SampleLamParser Trifecta.Parser a -> String -> Either ParseError a
-parseSampleLamString p = runSampleLamParser p initialIndentationState mempty
-
-parseSampleLamFile :: SampleLamParser Trifecta.Parser a -> FilePath -> IO (Either ParseError a)
-parseSampleLamFile p fn = BS.readFile fn <&>
-  runSampleLamParser p initialIndentationState (Directed (BS.fromString fn) 0 0 0 0)
 
 
 type ParsedAstAnn = Ann

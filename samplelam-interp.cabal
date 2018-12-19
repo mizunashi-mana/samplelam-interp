@@ -131,6 +131,7 @@ library
       Language.SampleLam.Core
       Language.SampleLam.Printer
       Language.SampleLam.Parser
+      Language.SampleLam.Parser.Common
       Language.SampleLam.Normalizer
       Language.SampleLam.Interpreter
 

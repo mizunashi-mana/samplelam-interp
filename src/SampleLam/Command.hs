@@ -4,6 +4,7 @@ import           SampleLam.Prelude
 
 import           Data.Text.Prettyprint.Doc.Render.Terminal
 import           Language.SampleLam.Parser
+import           Language.SampleLam.Parser.Common
 import           Language.SampleLam.Printer
 import           System.Environment
 
