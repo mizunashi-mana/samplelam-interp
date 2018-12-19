@@ -1,11 +1,11 @@
 module SampleLam.Command where
 
-import SampleLam.Prelude
+import           SampleLam.Prelude
 
-import Language.SampleLam.Parser
-import Language.SampleLam.Printer
-import Data.Text.Prettyprint.Doc.Render.Terminal
-import System.Environment
+import           Data.Text.Prettyprint.Doc.Render.Terminal
+import           Language.SampleLam.Parser
+import           Language.SampleLam.Printer
+import           System.Environment
 
 
 sampleMain :: IO ()

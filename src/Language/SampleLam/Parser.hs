@@ -360,12 +360,11 @@ grammarUnitsF inj ~us@GrammarUnitsF{..} = GrammarUnitsF
 
 
   , decls
-    =   Tok.symbol "{" *> ((:) <$> decl <*> many (some (Tok.symbol ";") *> decl) <|> pure []) <* Tok.symbol "}"
+    =   Tok.symbol "{" *> semidecls <* Tok.symbol "}"
     <|> localIndentation Trifecta.Gt (many $ absoluteIndentation decl)
 
   , semidecls
-    =   (:) <$> decl <*> (Tok.symbol ";" *> semidecls <|> pure [])
-    <|> Tok.symbol ";" *> semidecls
+    =   (:) <$> decl <*> many (some (Tok.symbol ";") *> decl)
     <|> pure []
 
   , decl = lackInj $ declF us
@@ -415,7 +414,7 @@ litExprF GrammarUnitsF{..} = LitExprF <$> lit
 declF :: MonadicTokenParsing m => GrammarUnitsF m r -> m (DeclF r 'DeclTag)
 declF GrammarUnitsF{..} = DeclF
   <$> var <*> args
-  <*> (Tok.symbol "=" *> expr)
+  <*> (Tok.symbol "=" *> localIndentation Trifecta.Gt expr)
 
 
 varF :: MonadicTokenParsing m => GrammarUnitsF m r -> m (VarF r 'VarTag)
