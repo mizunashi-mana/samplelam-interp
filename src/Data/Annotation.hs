@@ -1,3 +1,5 @@
+{-# LANGUAGE UndecidableInstances #-}
+
 module Data.Annotation
   ( Assoc(..)
   , (@=)
@@ -20,7 +22,7 @@ import           Data.Profunctor       (dimap)
 
 newtype RevApply a f = RevApply
   { getRevApply :: f a
-  }
+  } deriving (Eq, Ord, Show)
 
 instance Wrapper (RevApply i) where
   type Repr (RevApply i) f = f i
@@ -29,6 +31,17 @@ instance Wrapper (RevApply i) where
 newtype Ann fs i = AnnRecord
   { getAnnRecord :: RecordOf (RevApply i) fs
   }
+
+deriving instance
+  ( WrapForall Eq (Field (RevApply i)) fs
+  ) => Eq (Ann fs i)
+deriving instance
+  ( WrapForall Eq (Field (RevApply i)) fs
+  , WrapForall Ord (Field (RevApply i)) fs
+  ) => Ord (Ann fs i)
+deriving instance
+  ( WrapForall Show (Field (RevApply i)) fs
+  ) => Show (Ann fs i)
 
 annBuild :: HList (Field (RevApply i)) fs -> Ann fs i
 annBuild = AnnRecord . fromHList

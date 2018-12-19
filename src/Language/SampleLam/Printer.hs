@@ -24,7 +24,7 @@ prettySyntax = pretty . SourceOutput . HIdentity
 instance (forall i. Pretty (r i)) => Pretty (SourceOutput ExprF r j) where
   pretty (SourceOutput m) = case m of
     LamAbsF vs e      -> "(" <> encloseSep "\\" "->" space (pretty <$> vs) <+> pretty e <> ")"
-    AppF e es         -> "(" <> concatWith (<+>) (pretty <$> (e:es)) <> ")"
+    AppF e es         -> concatWith (<+>) (pretty <$> (e:es))
     InfixAppF e1 v e2 -> "(" <> pretty e1 <+> pretty v <+> pretty e2 <> ")"
     LetF ds e         -> "(" <> vsep ["let" <+> align (vsep $ pretty <$> ds), "in" <+> pretty e] <> ")"
     IfF c e1 e2       -> "(" <> "if" <+> pretty c <+> "then" <+> pretty e1 <+> "else" <+> pretty e2 <> ")"

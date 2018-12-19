@@ -8,11 +8,13 @@ import qualified Data.HashSet                as HashSet
 import           Data.HFunctor.OpenUnion
 import           Data.HigherOrder
 import           Data.HFunctor.Cofree
+import           Data.HFunctor.Unsafe
 import           Data.Annotation
 import           Data.Functor
 import           Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NonEmpty
 import           Language.SampleLam.Syntax
+import           Data.Semigroup.Reducer (Reducer)
 import           Text.Parser.Char
 import           Text.Parser.Combinators
 import           Text.Parser.Token           (IdentifierStyle (..),
@@ -21,10 +23,13 @@ import qualified Text.Parser.Token           as Tok
 import qualified Text.Parser.Token.Highlight as Highlight
 import           Text.Parser.Token.Style     (buildSomeSpaceParser,
                                               haskellCommentStyle)
+import qualified Text.Trifecta               as Trifecta
 import           Text.Trifecta.Combinators
 import           Text.Trifecta.Delta
 import           Text.Trifecta.Indentation   (IndentationParserT,
-                                              Token, IndentationParsing)
+                                              Token, IndentationParsing,
+                                              IndentationState)
+import qualified Text.Trifecta.Indentation   as Trifecta
 
 
 type MonadicTokenParsing m =
@@ -40,7 +45,7 @@ attachDelta p = p <*> position
 
 
 newtype SampleLamParser m a = SampleLamParser
-  { runSampleLamParser :: IndentationParserT Token m a
+  { getSampleLamParser :: IndentationParserT Token m a
   } deriving
     ( Functor
     , Applicative
@@ -65,6 +70,16 @@ instance DeltaParsing m => TokenParsing (SampleLamParser m) where
   highlight h = coerceSampleLamParser $ highlight h
   token p = coerceSampleLamParser token p <* Tok.whiteSpace
 
+emptyIndentationState :: IndentationState
+emptyIndentationState = Trifecta.mkIndentationState 0 Trifecta.infIndentation True Trifecta.Ge
+
+runSampleLamParser :: Reducer t Trifecta.Rope
+  => SampleLamParser Trifecta.Parser a -> IndentationState -> Delta -> t -> Trifecta.Result a
+runSampleLamParser (SampleLamParser p) = Trifecta.runParser . Trifecta.evalIndentationParserT p
+
+parseSampleLamString :: SampleLamParser Trifecta.Parser a -> String -> Trifecta.Result a
+parseSampleLamString p = runSampleLamParser p emptyIndentationState mempty
+
 
 type ParsedAstAnn = Ann
   '[ "sourceDelta" ':> Const Delta
@@ -83,6 +98,29 @@ attachParsedAnn = attachHCofree . hfmap injectU
 
     toHCofree x d = HCofreeF (toParsedAstAnn d) x
 
+
+programParser :: MonadicTokenParsing m => m (HFix ParsedAstF 'ExprTag)
+programParser = program grammarUnits
+
+grammarUnits :: MonadicTokenParsing m => GrammarUnitsF m (HFix ParsedAstF)
+grammarUnits = fix $ grammarUnitsF (hfmapCoerce . attachParsedAnn)
+
+
+type ExprUnits m r = m (r 'ExprTag)
+type ExprUnitsF m r =
+  m (r 'ExprTag) -> ExprUnits m r -> ExprUnits m r
+
+fixExprUnits
+  :: m (r 'ExprTag) -> [(ExprUnitsF m r, ExprUnits m r)] -> [ExprUnitsF m r]
+  -> [(ExprUnitsF m r, ExprUnits m r)]
+fixExprUnits = go
+  where
+    go _  _  []     = []
+    go pe es (f:fs) =
+      let
+        ce = snd $ head es
+      in (f, f pe ce) : go ce (tail es) fs
+
 {-
 
 Lexical Token:
@@ -90,7 +128,7 @@ Lexical Token:
 <reserved>   ::= "let" | "in" | "if" | "then" | "else"
 <identifier> ::= ([a-z_] [a-zA-Z_']*) - (<reserved>)
 <bool>       ::= "True" | "False"
-<integer>    ::= ("+"|"-")? [0-9]+ (("e"|"E") ("+"|"-")? [0-9]*)?
+<integer>    ::= [0-9]+ (("e"|"E") ("+"|"-")? [0-9]*)?
 
 
 Grammar:
@@ -167,18 +205,6 @@ Grammar:
 
 -}
 
-type ExprUnitsF m r =
-  m (r 'ExprTag) -> m (r 'ExprTag) -> m (r 'ExprTag)
-
-fixExprUnits :: GrammarUnitsF m r -> [ExprUnitsF m r] -> [(ExprUnitsF m r, m (r 'ExprTag))]
-fixExprUnits GrammarUnitsF{..} = go exprs
-  where
-    go []           []     = []
-    go ((_, ce):es) (f:fs) = case es of
-      []        -> [(f, f ce factor)]
-      (_, pe):_ -> (f, f ce pe) : go es fs
-    go _      _                    = error "unreachable"
-
 data GrammarUnitsF m r = GrammarUnitsF
   { identifier :: m String
   , reserved   :: String -> m ()
@@ -220,102 +246,114 @@ identStyle = IdentifierStyle
 grammarUnitsF :: forall m r. MonadicTokenParsing m
   => (forall f. Member AstF f => Compose m (f r) :~> Compose m r)
   -> GrammarUnitsF m r -> GrammarUnitsF m r
-grammarUnitsF inj us = GrammarUnitsF {..}
-  where
-    lackInj :: forall f i. Member AstF f => m (f r i) -> m (r i)
-    lackInj = coerce (unNat (inj @f) @i)
+grammarUnitsF inj ~us@GrammarUnitsF{..} = GrammarUnitsF
+  { identifier = Tok.ident identStyle
 
+  , reserved = Tok.reserve identStyle
 
-    identifier = Tok.ident identStyle
-
-    reserved   = Tok.reserve identStyle
-
-    bool
+  , bool
       =   reserved "True" *> pure True
       <|> reserved "False" *> pure False
 
-    integer = Tok.integer
+  , integer = Tok.natural
 
 
-    program = getField @"expr" us
+  , program = expr <* eof
 
+  , expr = NonEmpty.last $ expr0 :| fmap snd exprs
 
-    expr = case getField @"exprs" us of
-      []       -> getField @"expr0" us
-      (_, p):_ -> p
+  , expr0 = lackInj $ fexpr <&> \case
+    e :| es -> AppF e es
 
-    expr0 = lackInj
-      $ getField @"fexpr" us <&> \(e :| es) -> AppF e es
-
-    exprs = fixExprUnits us
-      [ \_ p -> lackInj
+  , exprs = fixExprUnits expr0 exprs $ reverse
+      [ \p _ ->
+        lackInj
           (   lamAbsF us
           <|> letF us
           <|> ifF us
           )
           <|> p
-      , \c p -> lackInj
-          (   InfixAppF <$> p <*> lackInj (varSymF us "||") <*> c
+      , \p c -> do
+        x <- p
+        lackInj
+          (   InfixAppF x <$> lackInj (varSymF us "||") <*> c
           )
-          <|> p
-      , \c p -> lackInj
-          (   InfixAppF <$> p <*> lackInj (varSymF us "&&") <*> c
+          <|> pure x
+      , \p c -> do
+        x <- p
+        lackInj
+          (   InfixAppF x <$> lackInj (varSymF us "&&") <*> c
           )
-          <|> p
-      , \c p -> lackInj
-          (   InfixAppF <$> p <*> lackInj (varSymF us "==") <*> c
-          <|> InfixAppF <$> p <*> lackInj (varSymF us "/=") <*> c
+          <|> pure x
+      , \p c -> do
+        x <- p
+        lackInj
+          (   InfixAppF x <$> lackInj (varSymF us "==") <*> c
+          <|> InfixAppF x <$> lackInj (varSymF us "/=") <*> c
           )
-          <|> p
-      , \c p -> lackInj
-          (   InfixAppF <$> p <*> lackInj (varSymF us "<=") <*> c
-          <|> InfixAppF <$> p <*> lackInj (varSymF us "<")  <*> c
-          <|> InfixAppF <$> p <*> lackInj (varSymF us ">=") <*> c
-          <|> InfixAppF <$> p <*> lackInj (varSymF us ">")  <*> c
+          <|> pure x
+      , \p c -> do
+        x <- p
+        lackInj
+          (   InfixAppF x <$> lackInj (varSymF us "<=") <*> c
+          <|> InfixAppF x <$> lackInj (varSymF us "<")  <*> c
+          <|> InfixAppF x <$> lackInj (varSymF us ">=") <*> c
+          <|> InfixAppF x <$> lackInj (varSymF us ">")  <*> c
           )
-          <|> p
-      , \c p -> lackInj
-          (   InfixAppF <$> p <*> lackInj (varSymF us "+") <*> c
-          <|> InfixAppF <$> p <*> lackInj (varSymF us "-") <*> c
+          <|> pure x
+      , \p c -> do
+        x <- p
+        lackInj
+          (   InfixAppF x <$> lackInj (varSymF us "+") <*> c
+          <|> InfixAppF x <$> lackInj (varSymF us "-") <*> c
           )
-          <|> p
-      , \c p -> lackInj
-          (   InfixAppF <$> p <*> lackInj (varSymF us "*") <*> c
-          <|> InfixAppF <$> p <*> lackInj (varSymF us "/") <*> c
-          <|> InfixAppF <$> p <*> lackInj (varSymF us "%") <*> c
+          <|> pure x
+      , \p c -> do
+        x <- p
+        lackInj
+          (   InfixAppF x <$> lackInj (varSymF us "*") <*> c
+          <|> InfixAppF x <$> lackInj (varSymF us "/") <*> c
+          <|> InfixAppF x <$> lackInj (varSymF us "%") <*> c
           )
-          <|> p
+          <|> pure x
       ]
 
-    fexpr
-      =   NonEmpty.cons <$> getField @"factor" us <*> getField @"fexpr" us
-      <|> pure <$> getField @"factor" us
+  , fexpr = do
+    x <- factor
+    (x :|) <$>
+      (   NonEmpty.toList <$> fexpr
+      <|> pure []
+      )
 
-    factor
-      =   getField @"evar" us
+  , factor
+      =   evar
       <|> lackInj (litExprF us)
-      <|> Tok.parens (getField @"expr" us)
+      <|> Tok.symbol "(" *> expr <* Tok.symbol ")"
 
-    evar = lackInj $ varExprF us
+  , evar = lackInj $ varExprF us
 
 
-    decls = undefined
+  , decls = undefined
 
-    decl = lackInj $ declF us
+  , decl = lackInj $ declF us
 
-    args
-      =   (:) <$> getField @"arg" us <*> getField @"args" us
+  , args
+      =   (:) <$> arg <*> args
       <|> pure []
 
-    arg = getField @"var" us
+  , arg = var
 
 
-    var = lackInj $ varF us
+  , var = lackInj $ varF us
 
 
-    lit = lackInj
+  , lit = lackInj
       $   boolLitF us
       <|> intLitF us
+  }
+  where
+    lackInj :: forall f i. Member AstF f => m (f r i) -> m (r i)
+    lackInj = coerce $ unNat (inj @f) @i
 
 
 lamAbsF :: MonadicTokenParsing m => GrammarUnitsF m r -> m (ExprF r 'ExprTag)

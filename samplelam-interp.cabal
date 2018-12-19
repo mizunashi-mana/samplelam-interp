@@ -38,6 +38,7 @@ common general
     , bound
     , prettyprinter
     , profunctors
+    , reducers
   ghc-options:
       -Wall
       -Wcompat
@@ -62,6 +63,7 @@ common general
       MultiParamTypeClasses
       OverloadedLabels
       RecordWildCards
+      TupleSections
       TypeOperators
 
       GeneralizedNewtypeDeriving
