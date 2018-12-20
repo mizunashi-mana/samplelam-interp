@@ -2,3 +2,6 @@
 
 :set -XOverloadedStrings
 :set -XOverloadedLists
+
+:set prompt ">>> "
+:set prompt-cont "  | "

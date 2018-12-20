@@ -45,7 +45,8 @@ attachParsedAnn :: (MonadicTokenParsing m, Member AstF f)
   => Compose m (f r) :~> Compose m (ParsedAstF r)
 attachParsedAnn = attachHCofree . hfmap injectU
   where
-    attachHCofree = Nat \(Compose m) -> Compose . attachSpan $ toHCofree <$> m
+    attachHCofree = Nat \case
+      Compose m -> Compose . attachSpan $ toHCofree <$> m
 
     toParsedAstAnn sp = annBuild
       $  #sourcePosSpan @= Const sp
@@ -57,7 +58,7 @@ attachParsedAnn = attachHCofree . hfmap injectU
 programParser :: MonadicTokenParsing m => m (HFix ParsedAstF 'ExprTag)
 programParser = Tok.whiteSpace *> program grammarUnits <* eof
 
-grammarUnits :: MonadicTokenParsing m => GrammarUnitsF m (HFix ParsedAstF)
+grammarUnits :: MonadicTokenParsing m => GrammarUnits m (HFix ParsedAstF)
 grammarUnits = fix $ grammarUnitsF (hfmapCoerce . attachParsedAnn)
 
 
@@ -161,7 +162,7 @@ Grammar:
 
 -}
 
-data GrammarUnitsF m r = GrammarUnitsF
+data GrammarUnits m r = GrammarUnits
   { identifier :: m String
   , reserved   :: String -> m ()
   , bool       :: m Bool
@@ -202,8 +203,8 @@ identStyle = IdentifierStyle
 
 grammarUnitsF :: forall m r. MonadicTokenParsing m
   => (forall f. Member AstF f => Compose m (f r) :~> Compose m r)
-  -> GrammarUnitsF m r -> GrammarUnitsF m r
-grammarUnitsF inj ~us@GrammarUnitsF{..} = GrammarUnitsF
+  -> GrammarUnits m r -> GrammarUnits m r
+grammarUnitsF inj ~us@GrammarUnits{..} = GrammarUnits
   { identifier = Tok.ident identStyle
 
   , reserved = Tok.reserve identStyle
@@ -319,44 +320,44 @@ grammarUnitsF inj ~us@GrammarUnitsF{..} = GrammarUnitsF
     lackInj = coerce $ unNat (inj @f) @i
 
 
-lamAbsF :: MonadicTokenParsing m => GrammarUnitsF m r -> m (ExprF r 'ExprTag)
-lamAbsF GrammarUnitsF{..} = Tok.symbol "\\" $> LamAbsF
+lamAbsF :: MonadicTokenParsing m => GrammarUnits m r -> m (ExprF r 'ExprTag)
+lamAbsF GrammarUnits{..} = Tok.symbol "\\" $> LamAbsF
   <*> args
   <*> (Tok.symbol "->" *> expr)
 
-letF :: MonadicTokenParsing m => GrammarUnitsF m r -> m (ExprF r 'ExprTag)
-letF GrammarUnitsF{..} = reserved "let" $> LetF
+letF :: MonadicTokenParsing m => GrammarUnits m r -> m (ExprF r 'ExprTag)
+letF GrammarUnits{..} = reserved "let" $> LetF
   <*> decls
   <*> (reserved "in" *> expr)
 
-ifF :: MonadicTokenParsing m => GrammarUnitsF m r -> m (ExprF r 'ExprTag)
-ifF GrammarUnitsF{..} = reserved "if" $> IfF
+ifF :: MonadicTokenParsing m => GrammarUnits m r -> m (ExprF r 'ExprTag)
+ifF GrammarUnits{..} = reserved "if" $> IfF
   <*> expr
   <*> (reserved "then" *> expr)
   <*> (reserved "else" *> expr)
 
-varExprF :: MonadicTokenParsing m => GrammarUnitsF m r -> m (ExprF r 'ExprTag)
-varExprF GrammarUnitsF{..} = VarExprF <$> var
+varExprF :: MonadicTokenParsing m => GrammarUnits m r -> m (ExprF r 'ExprTag)
+varExprF GrammarUnits{..} = VarExprF <$> var
 
-litExprF :: MonadicTokenParsing m => GrammarUnitsF m r -> m (ExprF r 'ExprTag)
-litExprF GrammarUnitsF{..} = LitExprF <$> lit
+litExprF :: MonadicTokenParsing m => GrammarUnits m r -> m (ExprF r 'ExprTag)
+litExprF GrammarUnits{..} = LitExprF <$> lit
 
 
-declF :: MonadicTokenParsing m => GrammarUnitsF m r -> m (DeclF r 'DeclTag)
-declF GrammarUnitsF{..} = DeclF
+declF :: MonadicTokenParsing m => GrammarUnits m r -> m (DeclF r 'DeclTag)
+declF GrammarUnits{..} = DeclF
   <$> var <*> args
   <*> (Tok.symbol "=" *> localIndentation Trifecta.Gt expr)
 
 
-varF :: MonadicTokenParsing m => GrammarUnitsF m r -> m (VarF r 'VarTag)
-varF GrammarUnitsF{..} = VarF <$> identifier
+varF :: MonadicTokenParsing m => GrammarUnits m r -> m (VarF r 'VarTag)
+varF GrammarUnits{..} = VarF <$> identifier
 
-varSymF :: MonadicTokenParsing m => GrammarUnitsF m r -> String -> m (VarF r 'VarTag)
-varSymF GrammarUnitsF{..} s = VarF <$> (Tok.symbol s *> pure s)
+varSymF :: MonadicTokenParsing m => GrammarUnits m r -> String -> m (VarF r 'VarTag)
+varSymF GrammarUnits{..} s = VarF <$> (Tok.symbol s *> pure s)
 
 
-boolLitF :: MonadicTokenParsing m => GrammarUnitsF m r -> m (LitF r 'LitTag)
-boolLitF GrammarUnitsF{..} = BoolLitF <$> bool
+boolLitF :: MonadicTokenParsing m => GrammarUnits m r -> m (LitF r 'LitTag)
+boolLitF GrammarUnits{..} = BoolLitF <$> bool
 
-intLitF :: MonadicTokenParsing m => GrammarUnitsF m r -> m (LitF r 'LitTag)
-intLitF GrammarUnitsF{..} = IntLitF <$> integer
+intLitF :: MonadicTokenParsing m => GrammarUnits m r -> m (LitF r 'LitTag)
+intLitF GrammarUnits{..} = IntLitF <$> integer
